@@ -47,29 +47,70 @@ async function createComplaint(req, res, next) {
         req.body.longitude !== undefined ? Number(req.body.longitude) : undefined
     });
 
+    const category = body.category || "OTHER";
+
+    const categoryToDepartment = {
+      ELECTRICITY: 'Electricity Board',
+      WATER: 'Water Authority', 
+      ROADS: 'Roads & PWD',
+      GARBAGE: 'Municipal Sanitation',
+      STREET_LIGHTS: 'Street Lighting',
+      EDUCATION: 'Education Department',
+      PUBLIC_SAFETY: 'Public Safety',
+      OTHER: 'Municipal Sanitation'
+    };
+
+    let departmentId = null;
+    const deptName = categoryToDepartment[category];
+    if (deptName) {
+      const dept = await prisma.department.findFirst({
+        where: { name: deptName }
+      });
+      if (dept) departmentId = dept.id;
+    }
+
     let complaint = await prisma.complaint.create({
       data: {
         title: body.title,
         description: body.description,
-        category: body.category || "OTHER",
+        category: category,
         urgency: body.urgency || "MEDIUM",
         latitude: body.latitude ?? null,
         longitude: body.longitude ?? null,
         address: body.address || null,
         imageUrl: req.file?.path ?? null,
+        departmentId: departmentId,
         userId: req.user.id
       }
     });
 
     const mlClassification = await classifyComplaint(body.title, body.description);
     if (mlClassification) {
+      let updatedData = {
+        aiCategory: mlClassification.category,
+        aiUrgency: mlClassification.urgency,
+        aiConfidence: mlClassification.confidence
+      };
+
+      if (mlClassification.category && mlClassification.category !== category) {
+        const newDeptName = categoryToDepartment[mlClassification.category];
+        if (newDeptName) {
+          try {
+            const newDept = await prisma.department.findFirst({
+              where: { name: newDeptName }
+            });
+            if (newDept) {
+              updatedData.departmentId = newDept.id;
+            }
+          } catch (err) {
+             console.log(`[complaintController] Error finding department for AI category ${mlClassification.category}:`, err.message);
+          }
+        }
+      }
+
       complaint = await prisma.complaint.update({
         where: { id: complaint.id },
-        data: {
-          aiCategory: mlClassification.category,
-          aiUrgency: mlClassification.urgency,
-          aiConfidence: mlClassification.confidence
-        }
+        data: updatedData
       });
     }
 
