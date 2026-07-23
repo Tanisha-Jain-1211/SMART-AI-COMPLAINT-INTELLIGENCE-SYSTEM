@@ -4,7 +4,7 @@
 Smart Complaint Intelligence System is a full-stack platform where citizens submit civic complaints and AI assists with category prediction, urgency scoring, and duplicate detection for faster resolution.
 
 ## Tech Stack
-- **Frontend**: React 18, Vite, Tailwind CSS, React Router v6, React Query, Zustand
+- **Frontend**: React 18, Vite, Tailwind CSS
 - **Backend**: Node.js, Express, Prisma ORM, PostgreSQL
 - **ML Service**: Python, FastAPI, Transformers ecosystem
 
@@ -13,15 +13,12 @@ Smart Complaint Intelligence System is a full-stack platform where citizens subm
 ### 1) Backend API (`backend`)
 ```bash
 cd backend
-npm install
-copy .env.example .env
 npm run dev
 ```
 
 ### 2) Frontend (`frontend`)
 ```bash
 cd frontend
-npm install
 npm run dev
 ```
 
