@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  # Database Service
+  postgres:
+    image: postgres:15-alpine
+    container_name: smart-complaint-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: smart_complaints
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d smart_complaints"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Machine Learning Service (FastAPI)
+  ml-service:
+    build:
+      context: ./ml-service
+      dockerfile: Dockerfile
+    container_name: smart-complaint-ml
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - MODEL_CACHE_DIR=/app/model_cache
+      - MAX_COMPLAINTS_FOR_DUPLICATE=100
+      - DUPLICATE_THRESHOLD=0.85
+      - MIN_CONFIDENCE=0.6
+      - ALLOWED_ORIGINS=http://localhost:5000,http://localhost:5173,http://localhost
+      - LOG_LEVEL=INFO
+    volumes:
+      - ml_model_cache:/app/model_cache
+
+  # Backend Service (Node Express + Prisma)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: smart-complaint-backend
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/smart_complaints?schema=public
+      - JWT_SECRET=this-is-a-very-strong-secret-key-for-local-dev-123!
+      - CLIENT_URL=http://localhost:5173
+      - EMAIL_USER=your_gmail@gmail.com
+      - EMAIL_PASS=your_gmail_app_password
+      - ML_SERVICE_URL=http://ml-service:8000
+      - MAX_COMPLAINTS_FOR_DUPLICATE=100
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ml-service:
+        condition: service_started
+
+  # Frontend Service (React Vite + Nginx)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=http://localhost:5000/api
+        - VITE_ML_URL=http://localhost:8000
+    container_name: smart-complaint-frontend
+    restart: always
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+    driver: local
+  ml_model_cache:
+    driver: local
